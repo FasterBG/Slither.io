@@ -1,0 +1,230 @@
+#include <iostream>
+#include <cstdlib>
+#include <ctime>
+#include <windows.h>
+#include <winuser.h>
+#include <stdlib.h>
+
+using namespace std;
+
+const int SCREEN_WIDTH=64;
+const int SCREEN_HEIGHT=64;
+char screen[SCREEN_WIDTH][SCREEN_HEIGHT];
+const int UI_WIDTH = 16;
+const char border_ch='*';
+const char player_ch = 'o';
+const char trace_ch = 254;
+
+int direction[2] = {2, 0};
+/*
+0 = UP
+1 = LEFT
+2 = DOWN
+3 = RIGHT
+*/
+
+bool end_game=false;
+
+int health_map[SCREEN_HEIGHT][SCREEN_WIDTH];
+
+const int pole_rows = SCREEN_HEIGHT;
+const int pole_cols = SCREEN_WIDTH + UI_WIDTH;
+
+int playerR[2] = {1, SCREEN_WIDTH - 2}, playerC[2] = {1, SCREEN_HEIGHT - 2};
+
+HANDLE hConsoleOutput = ::GetStdHandle(STD_OUTPUT_HANDLE);
+COORD screen_buf = {pole_cols, pole_rows};
+CHAR_INFO blank_screen[(pole_rows) * (pole_cols)] = {0};
+
+enum COLORS {
+    BLACK = 0,
+    BLUE = FOREGROUND_BLUE,
+    CYAN = FOREGROUND_BLUE | FOREGROUND_GREEN,
+    GREEN = FOREGROUND_GREEN,
+    RED = FOREGROUND_RED,
+    BROWN = FOREGROUND_RED | FOREGROUND_GREEN,
+    PURPLE = FOREGROUND_RED | FOREGROUND_BLUE,
+    LIGHT_GREY =  FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_GREEN,
+
+    GREY = 0 | FOREGROUND_INTENSITY,
+    LIGHT_BLUE = FOREGROUND_BLUE | FOREGROUND_INTENSITY,
+    LIGHT_CYAN = FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_INTENSITY,
+    LIGHT_GREEN = FOREGROUND_GREEN | FOREGROUND_INTENSITY,
+    LIGHT_RED = FOREGROUND_RED | FOREGROUND_INTENSITY,
+    YELLOW = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY,
+    PINK = FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY,
+    WHITE =  FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_INTENSITY
+};
+
+const COLORS backgroundColor = LIGHT_GREEN;
+const COLORS player_color[2] = {RED, BLUE};
+
+void draw_char(char ch, int y, int x, COLORS foreground_color, COLORS background_color) {
+    CHAR_INFO ch_info;
+    ch_info.Char.AsciiChar = ch;
+    ch_info.Attributes = foreground_color | (background_color << 4);
+
+    COORD buf_size = {1, 1};
+    COORD buf_coord = {0, 0};
+    SMALL_RECT screen_pos = {x, y, x+1, y+1};
+    ::WriteConsoleOutput(hConsoleOutput, &ch_info, buf_size, buf_coord, &screen_pos);
+
+}
+
+void clear_screen() {
+    COORD buf_coord = {0, 0};
+    SMALL_RECT screen_pos = {0, 0, screen_buf.X, screen_buf.Y};
+    ::WriteConsoleOutput(hConsoleOutput, blank_screen, screen_buf, buf_coord, &screen_pos);
+}
+
+void set_background() {
+    for (int i = 0; i < screen_buf.X; i++) {
+        for (int j = 0; j < screen_buf.Y; j++) {
+             draw_char(' ', j, i, BROWN, backgroundColor);
+        }
+    }
+}
+
+void init_console(){
+
+    SMALL_RECT rect = {0, 0, screen_buf.X, screen_buf.Y};
+
+    ::SetConsoleScreenBufferSize(hConsoleOutput, screen_buf);
+    ::SetConsoleWindowInfo(hConsoleOutput, TRUE, &rect);
+    ::SetConsoleTitle("MINECRAFT");
+    set_background();
+
+}
+
+void draw_str(char* str, int r, int c){
+    for(int i = 0; str[i]!='\0'; i++){
+        draw_char(str[i], r, c + i, BLACK, backgroundColor);
+    }
+}
+
+/*void checkForBuilding(char blockType, int blockHealth, int& needMaterial, char inputButton){
+    if(GetAsyncKeyState(inputButton) && needMaterial > 0){
+        int block_r, block_c;
+        if(steveDirection == 0){
+            block_c++;
+        }else if(steveDirection == 1){
+            block_c--;
+        }else if(steveDirection == 2){
+            block_r--;
+        }else if(steveDirection == 3){
+            block_r++;
+        }
+        if(screen[block_r][block_c] == '\0'){
+            screen[block_r][block_c] = blockType;
+            draw_char(blockType, block_r, block_c, GREY, backgroundColor);
+            health_map[block_r][block_c] = blockHealth;
+            needMaterial--;
+        }
+    }
+}
+*/
+
+
+void movePlayer(int pl){
+    int n_r = playerR[pl], n_c = playerC[pl];
+    if(pl == 0){
+        if (GetAsyncKeyState('W')) {
+            n_c++;
+            direction[pl] = 0;
+        }
+        else if (GetAsyncKeyState('A')) {
+            direction[pl] = 1;
+        }
+        else if (GetAsyncKeyState('S')) {
+            direction[pl] = 2;
+        }
+        else if (GetAsyncKeyState('D')) {
+            direction[pl] = 3;
+        }
+    }else{
+        if (GetAsyncKeyState('I')) {
+            direction[pl] = 0;
+        }
+        else if (GetAsyncKeyState('J')) {
+            direction[pl] = 1;
+        }
+        else if (GetAsyncKeyState('K')) {
+            direction[pl] = 2;
+        }
+        else if (GetAsyncKeyState('L')) {
+            direction[pl] = 3;
+        }
+    }
+    if(direction[pl] == 0){
+        n_r--;
+    }else if(direction[pl] == 1){
+        n_c--;
+    }else if(direction[pl] == 2){
+        n_r++;
+    }else{
+        n_c++;
+    }
+    if (screen[n_r][n_c]=='\0'){
+        screen[n_r][n_c]= player_ch;
+        draw_char(player_ch, n_r, n_c, player_color[pl], backgroundColor);
+        screen[playerR[pl]][playerC[pl]] = trace_ch;
+        draw_char(trace_ch, playerR[pl], playerC[pl], player_color[pl], backgroundColor);
+        playerR[pl] = n_r;
+        playerC[pl] = n_c;
+    }else{
+        if(pl==0){
+            draw_str("PLAYER 2 WINS!", 0, SCREEN_WIDTH + 2);
+        }else{
+            draw_str("PLAYER 1 WINS!", 0, SCREEN_WIDTH + 2);
+        }
+        end_game = true;
+
+    }
+}
+void add_static_blocks(const int max_count, const char ch, const int health, COLORS infront, COLORS background){
+    int br=0, r, c;
+    while (br<max_count){
+        r=rand()%SCREEN_HEIGHT;
+        c=rand()%SCREEN_WIDTH;
+        if (screen[r][c]=='\0'){
+            screen[r][c]=ch;
+            draw_char(ch, r, c, infront, background);
+            health_map[r][c]=health;
+            br++;
+        }
+    }
+}
+
+void init(){
+    draw_char(player_ch, playerR[0], playerC[0], player_color[0], backgroundColor);
+    draw_char(player_ch, playerR[1], playerC[1], player_color[1], backgroundColor);
+    for (int r=0; r<SCREEN_HEIGHT; r++){
+        screen[r][0]=border_ch;
+        draw_char(border_ch, r, 0, BLACK, backgroundColor);
+        health_map[r][0]=-1;
+        screen[r][SCREEN_WIDTH-1]=border_ch;
+        draw_char(border_ch, r, SCREEN_WIDTH-1, BLACK, backgroundColor);
+        health_map[r][SCREEN_WIDTH-1]=-1;
+    }
+    for (int c=0; c<SCREEN_WIDTH; c++){
+        screen[0][c]=border_ch;
+        draw_char(border_ch, 0, c, BLACK, backgroundColor);
+        health_map[0][c]=-1;
+        screen[SCREEN_HEIGHT-1][c]=border_ch;
+        draw_char(border_ch, SCREEN_HEIGHT-1, c, BLACK, backgroundColor);
+        health_map[SCREEN_HEIGHT-1][c]=-1;
+    }
+    srand(time(NULL));
+}
+
+int main(){
+    init_console();
+    init();
+    while (!end_game){
+        movePlayer(0);
+        movePlayer(1);
+        Sleep(200);
+    }
+    while(true){}
+    return 0;
+}
